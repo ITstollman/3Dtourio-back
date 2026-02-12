@@ -10,7 +10,7 @@ router.get("/:token", async (req: Request, res: Response) => {
     const { token } = req.params as Record<string, string>;
     const tour = await getTourByToken(token);
 
-    if (!tour || !tour.isPublic) {
+    if (!tour) {
       console.log(`⚠️ Public tour not found — token ${token}`);
       res.status(404).json({ error: "Not found" });
       return;
