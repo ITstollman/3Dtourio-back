@@ -72,13 +72,14 @@ export async function compressAndUploadAssets(
   spaceId: string,
   assets: WorldAssets
 ): Promise<CompressedUrls> {
+  console.log(`📦 Compressing assets for space ${spaceId}`);
   const tasks: Promise<void>[] = [];
   const result: CompressedUrls = {};
 
   if (assets.thumbnail_url) {
     tasks.push(
       compressImage(assets.thumbnail_url, spaceId, "thumbnail", 800).then(
-        (url) => { result.thumbnailUrl = url; }
+        (url) => { console.log(`📦 Thumbnail compressed (800px)`); result.thumbnailUrl = url; }
       )
     );
   }
@@ -86,7 +87,7 @@ export async function compressAndUploadAssets(
   if (assets.panorama_url) {
     tasks.push(
       compressImage(assets.panorama_url, spaceId, "panorama").then(
-        (url) => { result.panoramaUrl = url; }
+        (url) => { console.log("📦 Panorama uploaded"); result.panoramaUrl = url; }
       )
     );
   }
@@ -99,7 +100,7 @@ export async function compressAndUploadAssets(
   if (splatUrl) {
     tasks.push(
       reuploadBinary(splatUrl, spaceId, "model.spz", "application/octet-stream").then(
-        (url) => { result.splatUrl = url; }
+        (url) => { console.log("📦 Splat uploaded: full-res"); result.splatUrl = url; }
       )
     );
   }
@@ -107,7 +108,7 @@ export async function compressAndUploadAssets(
   if (assets.splats?.spz_urls?.["500k"]) {
     tasks.push(
       reuploadBinary(assets.splats.spz_urls["500k"], spaceId, "model-500k.spz", "application/octet-stream").then(
-        (url) => { result.splatUrl500k = url; }
+        (url) => { console.log("📦 Splat uploaded: 500k"); result.splatUrl500k = url; }
       )
     );
   }
@@ -115,7 +116,7 @@ export async function compressAndUploadAssets(
   if (assets.splats?.spz_urls?.["100k"]) {
     tasks.push(
       reuploadBinary(assets.splats.spz_urls["100k"], spaceId, "model-100k.spz", "application/octet-stream").then(
-        (url) => { result.splatUrl100k = url; }
+        (url) => { console.log("📦 Splat uploaded: 100k"); result.splatUrl100k = url; }
       )
     );
   }
@@ -123,7 +124,7 @@ export async function compressAndUploadAssets(
   if (assets.mesh?.glb_url) {
     tasks.push(
       reuploadBinary(assets.mesh.glb_url, spaceId, "model.glb", "model/gltf-binary").then(
-        (url) => { result.meshUrl = url; }
+        (url) => { console.log("📦 Mesh uploaded"); result.meshUrl = url; }
       )
     );
   }

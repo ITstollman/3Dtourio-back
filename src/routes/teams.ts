@@ -34,11 +34,17 @@ router.get("/", async (req: Request, res: Response) => {
     return;
   }
 
-  const teams = await getTeamsByUser(decoded.uid);
-  const userDoc = await db.collection("users").doc(decoded.uid).get();
-  const activeTeamId = userDoc.data()?.activeTeamId || null;
+  try {
+    const teams = await getTeamsByUser(decoded.uid);
+    const userDoc = await db.collection("users").doc(decoded.uid).get();
+    const activeTeamId = userDoc.data()?.activeTeamId || null;
 
-  res.json({ teams, activeTeamId });
+    console.log(`👥 Listed ${teams.length} teams for user ${decoded.uid}`);
+    res.json({ teams, activeTeamId });
+  } catch (err) {
+    console.error("❌ Failed to list teams:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // POST /api/teams — Create new team
@@ -55,29 +61,35 @@ router.post("/", async (req: Request, res: Response) => {
     return;
   }
 
-  const now = new Date().toISOString();
-  const teamId = randomUUID();
+  try {
+    const now = new Date().toISOString();
+    const teamId = randomUUID();
 
-  const team: Team = {
-    id: teamId,
-    name: parsed.data.name,
-    type: "organization",
-    ownerId: decoded.uid,
-    memberIds: [decoded.uid],
-    inviteCode: generateInviteCode(),
-    inviteEnabled: true,
-    createdAt: now,
-    updatedAt: now,
-  };
+    const team: Team = {
+      id: teamId,
+      name: parsed.data.name,
+      type: "organization",
+      ownerId: decoded.uid,
+      memberIds: [decoded.uid],
+      inviteCode: generateInviteCode(),
+      inviteEnabled: true,
+      createdAt: now,
+      updatedAt: now,
+    };
 
-  const batch = db.batch();
-  batch.set(db.collection("teams").doc(teamId), team);
-  batch.update(db.collection("users").doc(decoded.uid), {
-    teamIds: FieldValue.arrayUnion(teamId),
-  });
-  await batch.commit();
+    const batch = db.batch();
+    batch.set(db.collection("teams").doc(teamId), team);
+    batch.update(db.collection("users").doc(decoded.uid), {
+      teamIds: FieldValue.arrayUnion(teamId),
+    });
+    await batch.commit();
 
-  res.status(201).json(team);
+    console.log(`👥 Team created: "${parsed.data.name}" by ${decoded.uid}`);
+    res.status(201).json(team);
+  } catch (err) {
+    console.error("❌ Failed to create team:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // PUT /api/teams/active — Switch active team
@@ -94,17 +106,23 @@ router.put("/active", async (req: Request, res: Response) => {
     return;
   }
 
-  const team = await getTeam(parsed.data.teamId);
-  if (!team || !team.memberIds.includes(decoded.uid)) {
-    res.status(404).json({ error: "Team not found" });
-    return;
+  try {
+    const team = await getTeam(parsed.data.teamId);
+    if (!team || !team.memberIds.includes(decoded.uid)) {
+      res.status(404).json({ error: "Team not found" });
+      return;
+    }
+
+    await db.collection("users").doc(decoded.uid).update({
+      activeTeamId: parsed.data.teamId,
+    });
+
+    console.log(`👥 Active team switched to ${parsed.data.teamId} for user ${decoded.uid}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ Failed to switch team:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-
-  await db.collection("users").doc(decoded.uid).update({
-    activeTeamId: parsed.data.teamId,
-  });
-
-  res.json({ success: true });
 });
 
 // GET /api/teams/join?code=... — Preview team by invite code (no auth)
@@ -115,16 +133,22 @@ router.get("/join", async (req: Request, res: Response) => {
     return;
   }
 
-  const team = await getTeamByInviteCode(code);
-  if (!team) {
-    res.status(404).json({ error: "Invite not found" });
-    return;
-  }
+  try {
+    const team = await getTeamByInviteCode(code);
+    if (!team) {
+      res.status(404).json({ error: "Invite not found" });
+      return;
+    }
 
-  res.json({
-    teamName: team.name,
-    memberCount: team.memberIds.length,
-  });
+    console.log(`👥 Team preview requested: code ${code}`);
+    res.json({
+      teamName: team.name,
+      memberCount: team.memberIds.length,
+    });
+  } catch (err) {
+    console.error("❌ Failed to preview team:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // POST /api/teams/join — Join team by invite code
@@ -141,24 +165,30 @@ router.post("/join", async (req: Request, res: Response) => {
     return;
   }
 
-  const team = await getTeamByInviteCode(parsed.data.inviteCode);
-  if (!team) {
-    res.status(404).json({ error: "Invalid or expired invite code" });
-    return;
+  try {
+    const team = await getTeamByInviteCode(parsed.data.inviteCode);
+    if (!team) {
+      res.status(404).json({ error: "Invalid or expired invite code" });
+      return;
+    }
+
+    if (team.memberIds.includes(decoded.uid)) {
+      res.status(409).json({ error: "Already a member", teamId: team.id });
+      return;
+    }
+
+    await addMemberToTeam(team.id, decoded.uid);
+
+    await db.collection("users").doc(decoded.uid).update({
+      teamIds: FieldValue.arrayUnion(team.id),
+    });
+
+    console.log(`👥 User ${decoded.uid} joined team ${team.id}`);
+    res.json({ success: true, teamId: team.id, teamName: team.name });
+  } catch (err) {
+    console.error("❌ Failed to join team:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-
-  if (team.memberIds.includes(decoded.uid)) {
-    res.status(409).json({ error: "Already a member", teamId: team.id });
-    return;
-  }
-
-  await addMemberToTeam(team.id, decoded.uid);
-
-  await db.collection("users").doc(decoded.uid).update({
-    teamIds: FieldValue.arrayUnion(team.id),
-  });
-
-  res.json({ success: true, teamId: team.id, teamName: team.name });
 });
 
 // GET /api/teams/:id — Get team details
@@ -169,13 +199,19 @@ router.get("/:id", async (req: Request, res: Response) => {
     return;
   }
 
-  const team = await getTeam(req.params.id as string);
-  if (!team || !team.memberIds.includes(decoded.uid)) {
-    res.status(404).json({ error: "Team not found" });
-    return;
-  }
+  try {
+    const team = await getTeam(req.params.id as string);
+    if (!team || !team.memberIds.includes(decoded.uid)) {
+      res.status(404).json({ error: "Team not found" });
+      return;
+    }
 
-  res.json(team);
+    console.log(`👥 Team ${req.params.id} details fetched`);
+    res.json(team);
+  } catch (err) {
+    console.error("❌ Failed to get team:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // PATCH /api/teams/:id — Update team name
@@ -186,20 +222,26 @@ router.patch("/:id", async (req: Request, res: Response) => {
     return;
   }
 
-  const team = await getTeam(req.params.id as string);
-  if (!team || !team.memberIds.includes(decoded.uid)) {
-    res.status(404).json({ error: "Team not found" });
-    return;
-  }
+  try {
+    const team = await getTeam(req.params.id as string);
+    if (!team || !team.memberIds.includes(decoded.uid)) {
+      res.status(404).json({ error: "Team not found" });
+      return;
+    }
 
-  const parsed = createTeamSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten().fieldErrors });
-    return;
-  }
+    const parsed = createTeamSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten().fieldErrors });
+      return;
+    }
 
-  const updated = await updateTeam(req.params.id as string, { name: parsed.data.name });
-  res.json(updated);
+    const updated = await updateTeam(req.params.id as string, { name: parsed.data.name });
+    console.log(`👥 Team ${req.params.id} updated: name="${parsed.data.name}"`);
+    res.json(updated);
+  } catch (err) {
+    console.error("❌ Failed to update team:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // DELETE /api/teams/:id — Delete team
@@ -210,31 +252,37 @@ router.delete("/:id", async (req: Request, res: Response) => {
     return;
   }
 
-  const team = await getTeam(req.params.id as string);
-  if (!team || !team.memberIds.includes(decoded.uid)) {
-    res.status(404).json({ error: "Team not found" });
-    return;
-  }
+  try {
+    const team = await getTeam(req.params.id as string);
+    if (!team || !team.memberIds.includes(decoded.uid)) {
+      res.status(404).json({ error: "Team not found" });
+      return;
+    }
 
-  if (team.type === "personal") {
-    res.status(400).json({ error: "Cannot delete personal team" });
-    return;
-  }
+    if (team.type === "personal") {
+      res.status(400).json({ error: "Cannot delete personal team" });
+      return;
+    }
 
-  if (team.ownerId !== decoded.uid) {
-    res.status(403).json({ error: "Only the team owner can delete the team" });
-    return;
-  }
+    if (team.ownerId !== decoded.uid) {
+      res.status(403).json({ error: "Only the team owner can delete the team" });
+      return;
+    }
 
-  const spaces = await getAllSpaces(req.params.id as string);
-  const tours = await getAllTours(req.params.id as string);
-  if (spaces.length > 0 || tours.length > 0) {
-    res.status(400).json({ error: "Cannot delete team with existing spaces or tours" });
-    return;
-  }
+    const spaces = await getAllSpaces(req.params.id as string);
+    const tours = await getAllTours(req.params.id as string);
+    if (spaces.length > 0 || tours.length > 0) {
+      res.status(400).json({ error: "Cannot delete team with existing spaces or tours" });
+      return;
+    }
 
-  await deleteTeam(req.params.id as string);
-  res.json({ success: true });
+    await deleteTeam(req.params.id as string);
+    console.log(`👥 Team ${req.params.id} deleted by ${decoded.uid}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ Failed to delete team:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // POST /api/teams/:id/invite — Regenerate invite code
@@ -245,14 +293,20 @@ router.post("/:id/invite", async (req: Request, res: Response) => {
     return;
   }
 
-  const team = await getTeam(req.params.id as string);
-  if (!team || !team.memberIds.includes(decoded.uid)) {
-    res.status(404).json({ error: "Team not found" });
-    return;
-  }
+  try {
+    const team = await getTeam(req.params.id as string);
+    if (!team || !team.memberIds.includes(decoded.uid)) {
+      res.status(404).json({ error: "Team not found" });
+      return;
+    }
 
-  const updated = await updateTeam(req.params.id as string, { inviteCode: generateInviteCode() });
-  res.json(updated);
+    const updated = await updateTeam(req.params.id as string, { inviteCode: generateInviteCode() });
+    console.log(`👥 Invite code regenerated for team ${req.params.id}`);
+    res.json(updated);
+  } catch (err) {
+    console.error("❌ Failed to regenerate invite:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // PATCH /api/teams/:id/invite — Enable/disable invites
@@ -263,22 +317,28 @@ router.patch("/:id/invite", async (req: Request, res: Response) => {
     return;
   }
 
-  const team = await getTeam(req.params.id as string);
-  if (!team || !team.memberIds.includes(decoded.uid)) {
-    res.status(404).json({ error: "Team not found" });
-    return;
-  }
+  try {
+    const team = await getTeam(req.params.id as string);
+    if (!team || !team.memberIds.includes(decoded.uid)) {
+      res.status(404).json({ error: "Team not found" });
+      return;
+    }
 
-  const parsed = updateInviteSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten().fieldErrors });
-    return;
-  }
+    const parsed = updateInviteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten().fieldErrors });
+      return;
+    }
 
-  const updated = await updateTeam(req.params.id as string, {
-    inviteEnabled: parsed.data.enabled,
-  });
-  res.json(updated);
+    const updated = await updateTeam(req.params.id as string, {
+      inviteEnabled: parsed.data.enabled,
+    });
+    console.log(`👥 Invite ${parsed.data.enabled ? "enabled" : "disabled"} for team ${req.params.id}`);
+    res.json(updated);
+  } catch (err) {
+    console.error("❌ Failed to update invite:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // DELETE /api/teams/:id/members — Leave team
@@ -289,38 +349,44 @@ router.delete("/:id/members", async (req: Request, res: Response) => {
     return;
   }
 
-  const id = req.params.id as string;
-  const team = await getTeam(id);
-  if (!team || !team.memberIds.includes(decoded.uid)) {
-    res.status(404).json({ error: "Team not found" });
-    return;
+  try {
+    const id = req.params.id as string;
+    const team = await getTeam(id);
+    if (!team || !team.memberIds.includes(decoded.uid)) {
+      res.status(404).json({ error: "Team not found" });
+      return;
+    }
+
+    if (team.type === "personal") {
+      res.status(400).json({ error: "Cannot leave personal team" });
+      return;
+    }
+
+    if (team.ownerId === decoded.uid) {
+      res.status(400).json({ error: "Owner cannot leave the team" });
+      return;
+    }
+
+    await removeMemberFromTeam(id, decoded.uid);
+
+    const userRef = db.collection("users").doc(decoded.uid);
+    const userDoc = await userRef.get();
+    const userData = userDoc.data();
+
+    const personalTeamId =
+      userData?.teamIds?.find((tid: string) => tid !== id) || null;
+
+    await userRef.update({
+      teamIds: FieldValue.arrayRemove(id),
+      activeTeamId: personalTeamId,
+    });
+
+    console.log(`👥 User ${decoded.uid} left team ${id}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ Failed to leave team:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-
-  if (team.type === "personal") {
-    res.status(400).json({ error: "Cannot leave personal team" });
-    return;
-  }
-
-  if (team.ownerId === decoded.uid) {
-    res.status(400).json({ error: "Owner cannot leave the team" });
-    return;
-  }
-
-  await removeMemberFromTeam(id, decoded.uid);
-
-  const userRef = db.collection("users").doc(decoded.uid);
-  const userDoc = await userRef.get();
-  const userData = userDoc.data();
-
-  const personalTeamId =
-    userData?.teamIds?.find((tid: string) => tid !== id) || null;
-
-  await userRef.update({
-    teamIds: FieldValue.arrayRemove(id),
-    activeTeamId: personalTeamId,
-  });
-
-  res.json({ success: true });
 });
 
 export default router;

@@ -10,7 +10,7 @@ if (getApps().length === 0) {
       const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) as ServiceAccount;
       credential = cert(sa);
     } catch {
-      console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT — ensure it is valid JSON");
+      console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT — ensure it is valid JSON");
       process.exit(1);
     }
   } else {

@@ -1,4 +1,4 @@
-import { db } from "./firebase";
+import { db, bucket } from "./firebase";
 
 const COLLECTION = "spaces";
 
@@ -60,6 +60,14 @@ export async function deleteSpace(id: string): Promise<boolean> {
   if (!doc.exists) return false;
   await ref.delete();
   return true;
+}
+
+export async function deleteSpaceFiles(spaceId: string): Promise<void> {
+  const prefixes = [`models/${spaceId}/`, `images/${spaceId}/`];
+  for (const prefix of prefixes) {
+    const [files] = await bucket.getFiles({ prefix });
+    await Promise.all(files.map((f) => f.delete()));
+  }
 }
 
 export async function getSpacesByIds(ids: string[]): Promise<Space[]> {

@@ -74,6 +74,7 @@ export async function generateWorldFromImageBase64(
     },
   };
 
+  console.log("🎨 WorldLabs API call — generateFromImage");
   const operation = await apiFetch("worlds:generate", {
     method: "POST",
     body: JSON.stringify({
@@ -95,6 +96,7 @@ export async function generateWorldFromText(
     disable_recaption: false,
   };
 
+  console.log("🎨 WorldLabs API call — generateFromText");
   const operation = await apiFetch("worlds:generate", {
     method: "POST",
     body: JSON.stringify({
@@ -107,10 +109,12 @@ export async function generateWorldFromText(
 }
 
 export async function getOperation(operationId: string): Promise<Operation> {
+  console.log(`🎨 WorldLabs API call — getOperation ${operationId}`);
   return await apiFetch(`operations/${operationId}`);
 }
 
 export async function getWorld(worldId: string): Promise<World> {
+  console.log(`🎨 WorldLabs API call — getWorld ${worldId}`);
   return await apiFetch(`worlds/${worldId}`);
 }
 

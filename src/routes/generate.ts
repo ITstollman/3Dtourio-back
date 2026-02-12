@@ -47,6 +47,7 @@ router.post("/", upload.single("file"), async (req: Request, res: Response) => {
         return;
       }
 
+      console.log(`🎨 Image uploaded for space ${spaceId} (${file.size} bytes)`);
       const base64 = file.buffer.toString("base64");
 
       const ext = file.originalname.split(".").pop() || "jpg";
@@ -67,10 +68,11 @@ router.post("/", upload.single("file"), async (req: Request, res: Response) => {
       status: "generating",
     });
 
+    console.log(`🎨 Generation started — space ${spaceId}, model: ${draft ? "mini" : "plus"}`);
     res.json({ operationId, status: "generating" });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Generate error:", message);
+    console.error("❌ Generate error:", message);
     res.status(500).json({ error: message });
   }
 });

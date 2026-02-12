@@ -2,6 +2,9 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
 
 import authRoutes from "./routes/auth";
 import teamsRoutes from "./routes/teams";
@@ -14,13 +17,63 @@ import publicRoutes from "./routes/public";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Security headers
+app.use(helmet());
+
+// Gzip compression
+app.use(compression());
+
+// CORS — multi-origin support
+const allowedOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:3000",
+  process.env.DISPLAY_URL,
+  process.env.LANDING_URL,
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log(`⚠️ CORS blocked request from origin: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
 }));
+
 app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
+
+// Rate limiting — general API
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+app.use("/api/", limiter);
+
+// Stricter rate limit for auth
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+app.use("/api/auth/session", authLimiter);
+
+// Stricter rate limit for generation (expensive)
+const generateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Generation limit reached, please try again later" },
+});
+app.use("/api/generate", generateLimiter);
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -33,12 +86,13 @@ app.use("/api/t", publicRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {
+  console.log("💚 Health check pinged");
   res.json({ status: "ok" });
 });
 
 // Global error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error("Unhandled error:", err);
+  console.error("❌ Unhandled error:", err);
   res.status(500).json({ error: "Internal server error" });
 });
 
@@ -50,17 +104,20 @@ if (!hasServiceAccount) {
 }
 for (const v of requiredVars) {
   if (!process.env[v]) {
-    console.error(`Missing required environment variable: ${v}`);
+    console.error(`❌ Missing required environment variable: ${v}`);
     process.exit(1);
   }
 }
 
+console.log(`🚀 Environment validated — ${requiredVars.length} required vars OK`);
+console.log(`🚀 Allowed CORS origins: ${allowedOrigins.join(", ")}`);
+
 const server = app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
 
 // Graceful shutdown
 process.on("SIGTERM", () => {
-  console.log("SIGTERM received, shutting down gracefully...");
+  console.log("🚀 SIGTERM received, shutting down gracefully...");
   server.close(() => process.exit(0));
 });

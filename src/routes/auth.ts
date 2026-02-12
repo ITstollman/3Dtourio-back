@@ -14,12 +14,13 @@ router.post("/session", async (req: Request, res: Response) => {
   try {
     const parsed = sessionSchema.safeParse(req.body);
     if (!parsed.success) {
+      console.log("⚠️ POST /auth/session — invalid request body");
       res.status(400).json({ error: parsed.error.flatten().fieldErrors });
       return;
     }
 
     const { token } = parsed.data;
-    await getAuth().verifyIdToken(token);
+    const decoded = await getAuth().verifyIdToken(token);
 
     const expiresIn = 60 * 60 * 24 * 5 * 1000;
     const sessionCookie = await getAuth().createSessionCookie(token, { expiresIn });
@@ -32,8 +33,10 @@ router.post("/session", async (req: Request, res: Response) => {
       sameSite: "lax",
     });
 
+    console.log(`🔐 Session created for user ${decoded.uid}`);
     res.json({ status: "success" });
   } catch {
+    console.log("⚠️ POST /auth/session — invalid or expired token");
     res.status(401).json({ error: "Invalid token" });
   }
 });
@@ -41,6 +44,7 @@ router.post("/session", async (req: Request, res: Response) => {
 // DELETE /api/auth/session — Clear session cookie
 router.delete("/session", (_req: Request, res: Response) => {
   res.clearCookie("session", { path: "/" });
+  console.log("🔐 Session cleared");
   res.json({ status: "success" });
 });
 
@@ -52,8 +56,10 @@ router.get("/me", async (req: Request, res: Response) => {
     return;
   }
 
+  console.log(`🔐 GET /auth/me — user ${decoded.uid}`);
   const doc = await db.collection("users").doc(decoded.uid).get();
   if (!doc.exists) {
+    console.log(`👤 User ${decoded.uid} has no profile yet (needs onboarding)`);
     res.json({
       uid: decoded.uid,
       email: decoded.email,
@@ -80,6 +86,7 @@ router.post("/onboarding", async (req: Request, res: Response) => {
 
   const parsed = onboardingSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log(`⚠️ POST /auth/onboarding — validation failed for user ${decoded.uid}`);
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
@@ -120,6 +127,7 @@ router.post("/onboarding", async (req: Request, res: Response) => {
 
   await batch.commit();
 
+  console.log(`👤 Onboarding complete — user ${decoded.uid}, type: ${parsed.data.businessType}`);
   res.json({ success: true, teamId });
 });
 
@@ -133,6 +141,7 @@ router.patch("/me", async (req: Request, res: Response) => {
 
   const parsed = updateProfileSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log(`⚠️ PATCH /auth/me — validation failed for user ${decoded.uid}`);
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
@@ -154,9 +163,10 @@ router.patch("/me", async (req: Request, res: Response) => {
     }
 
     const doc = await db.collection("users").doc(decoded.uid).get();
+    console.log(`👤 Profile updated — user ${decoded.uid}`);
     res.json(doc.data());
   } catch (err) {
-    console.error("Profile update error:", err);
+    console.error("❌ Profile update error:", err);
     res.status(500).json({ error: "Failed to update profile" });
   }
 });
@@ -178,6 +188,7 @@ router.delete("/me", async (req: Request, res: Response) => {
       .get();
 
     if (!ownedTeams.empty) {
+      console.log(`⚠️ DELETE /auth/me — user ${decoded.uid} still owns ${ownedTeams.size} org teams`);
       res.status(400).json({
         error: "Transfer or delete your teams before deleting your account",
       });
@@ -192,6 +203,7 @@ router.delete("/me", async (req: Request, res: Response) => {
 
     const batch = db.batch();
 
+    console.log(`👤 Deleting account for user ${decoded.uid} — cleaning up ${memberTeams.size} team memberships`);
     for (const teamDoc of memberTeams.docs) {
       const team = teamDoc.data();
       if (team.type === "personal") {
@@ -214,9 +226,10 @@ router.delete("/me", async (req: Request, res: Response) => {
     // Delete Firebase Auth user
     await getAuth().deleteUser(decoded.uid);
 
+    console.log(`👤 Account deleted — user ${decoded.uid}`);
     res.json({ success: true });
   } catch (err) {
-    console.error("Account deletion error:", err);
+    console.error("❌ Account deletion error:", err);
     res.status(500).json({ error: "Failed to delete account" });
   }
 });

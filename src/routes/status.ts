@@ -15,6 +15,7 @@ router.get("/:operationId", async (req: Request, res: Response) => {
   }
 
   const { operationId } = req.params as Record<string, string>;
+  console.log(`📊 Status check — operation ${operationId}`);
 
   const spaces = await getAllSpaces(ctx.teamId);
   const space = spaces.find((s) => s.operationId === operationId);
@@ -30,6 +31,7 @@ router.get("/:operationId", async (req: Request, res: Response) => {
       const worldId = operation.response.world_id;
       const world = await getWorld(worldId);
 
+      console.log(`📊 Generation complete — space ${space.id}, world ${worldId}`);
       const compressed = await compressAndUploadAssets(space.id, {
         thumbnail_url: world.assets?.thumbnail_url,
         panorama_url: world.assets?.panorama_url,
@@ -54,6 +56,7 @@ router.get("/:operationId", async (req: Request, res: Response) => {
     }
 
     if (operation.done && operation.error) {
+      console.log(`⚠️ Generation failed — space ${space.id}: ${operation.error.message}`);
       await updateSpace(space.id, {
         status: "failed",
         errorMessage: operation.error.message,
@@ -66,7 +69,7 @@ router.get("/:operationId", async (req: Request, res: Response) => {
     res.json({ done: false, operationId });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Status check error:", message);
+    console.error("❌ Status check error:", message);
     res.status(500).json({ error: message });
   }
 });
