@@ -60,10 +60,10 @@ const limiter = rateLimit({
 });
 app.use("/api/", limiter);
 
-// Stricter rate limit for auth
+// Rate limit for auth (higher since onAuthStateChanged fires on every navigation)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 20,
+  limit: 60,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
