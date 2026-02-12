@@ -35,6 +35,7 @@ router.post("/", async (req: Request, res: Response) => {
 
   const parsed = createSpaceSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log(`⚠️ POST /spaces — validation failed for team ${ctx.teamId}`);
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
@@ -75,6 +76,7 @@ router.get("/:id", async (req: Request, res: Response) => {
   try {
     const space = await getSpace(req.params.id as string);
     if (!space || space.teamId !== ctx.teamId) {
+      console.log(`⚠️ GET /spaces/${req.params.id} — not found or wrong team`);
       res.status(404).json({ error: "Space not found" });
       return;
     }
@@ -97,12 +99,14 @@ router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const existing = await getSpace(req.params.id as string);
     if (!existing || existing.teamId !== ctx.teamId) {
+      console.log(`⚠️ PATCH /spaces/${req.params.id} — not found or wrong team`);
       res.status(404).json({ error: "Space not found" });
       return;
     }
 
     const parsed = updateSpaceSchema.safeParse(req.body);
     if (!parsed.success) {
+      console.log(`⚠️ PATCH /spaces/${req.params.id} — validation failed`);
       res.status(400).json({ error: parsed.error.flatten().fieldErrors });
       return;
     }
@@ -127,6 +131,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const existing = await getSpace(req.params.id as string);
     if (!existing || existing.teamId !== ctx.teamId) {
+      console.log(`⚠️ DELETE /spaces/${req.params.id} — not found or wrong team`);
       res.status(404).json({ error: "Space not found" });
       return;
     }

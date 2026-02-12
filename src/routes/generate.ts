@@ -28,12 +28,14 @@ router.post("/", upload.single("file"), async (req: Request, res: Response) => {
     const file = req.file;
 
     if (!spaceId) {
+      console.log("⚠️ POST /generate — missing spaceId");
       res.status(400).json({ error: "spaceId is required" });
       return;
     }
 
     const space = await getSpace(spaceId);
     if (!space || space.teamId !== ctx.teamId) {
+      console.log(`⚠️ POST /generate — space ${spaceId} not found or wrong team`);
       res.status(404).json({ error: "Space not found" });
       return;
     }
@@ -43,6 +45,7 @@ router.post("/", upload.single("file"), async (req: Request, res: Response) => {
 
     if (file) {
       if (!ALLOWED_TYPES.includes(file.mimetype)) {
+        console.log(`⚠️ POST /generate — rejected file type: ${file.mimetype}`);
         res.status(400).json({ error: "Invalid file type. Allowed: JPEG, PNG, WebP, HEIC" });
         return;
       }
@@ -60,6 +63,7 @@ router.post("/", upload.single("file"), async (req: Request, res: Response) => {
 
       operationId = await generateWorldFromImageBase64(base64, space.name, draft);
     } else {
+      console.log(`🎨 Text-only generation for space ${spaceId}`);
       operationId = await generateWorldFromText(space.name, draft);
     }
 

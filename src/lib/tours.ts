@@ -37,6 +37,7 @@ export async function getTour(id: string): Promise<Tour | undefined> {
 }
 
 export async function createTour(tour: Tour): Promise<Tour> {
+  console.log(`💾 Firestore: creating tour ${tour.id} (${tour.name})`);
   await db.collection(COLLECTION).doc(tour.id).set(tour);
   return tour;
 }
@@ -45,6 +46,7 @@ export async function updateTour(id: string, updates: Partial<Tour>): Promise<To
   const ref = db.collection(COLLECTION).doc(id);
   const doc = await ref.get();
   if (!doc.exists) return null;
+  console.log(`💾 Firestore: updating tour ${id} — keys: ${Object.keys(updates).join(", ")}`);
   const merged = { ...doc.data(), ...updates, updatedAt: new Date().toISOString() };
   await ref.set(merged, { merge: true });
   return merged as Tour;
@@ -54,11 +56,13 @@ export async function deleteTour(id: string): Promise<boolean> {
   const ref = db.collection(COLLECTION).doc(id);
   const doc = await ref.get();
   if (!doc.exists) return false;
+  console.log(`💾 Firestore: deleting tour ${id}`);
   await ref.delete();
   return true;
 }
 
 export async function addRoomToTour(tourId: string, room: TourRoom): Promise<Tour | null> {
+  console.log(`💾 Firestore: adding room to tour ${tourId} (space ${room.spaceId})`);
   return db.runTransaction(async (txn) => {
     const ref = db.collection(COLLECTION).doc(tourId);
     const doc = await txn.get(ref);
@@ -73,6 +77,7 @@ export async function addRoomToTour(tourId: string, room: TourRoom): Promise<Tou
 }
 
 export async function removeRoomFromTour(tourId: string, spaceId: string): Promise<Tour | null> {
+  console.log(`💾 Firestore: removing room from tour ${tourId} (space ${spaceId})`);
   return db.runTransaction(async (txn) => {
     const ref = db.collection(COLLECTION).doc(tourId);
     const doc = await txn.get(ref);

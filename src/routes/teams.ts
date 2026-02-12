@@ -57,6 +57,7 @@ router.post("/", async (req: Request, res: Response) => {
 
   const parsed = createTeamSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log(`⚠️ POST /teams — validation failed for user ${decoded.uid}`);
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
@@ -102,6 +103,7 @@ router.put("/active", async (req: Request, res: Response) => {
 
   const parsed = switchTeamSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log(`⚠️ PUT /teams/active — validation failed for user ${decoded.uid}`);
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
@@ -109,6 +111,7 @@ router.put("/active", async (req: Request, res: Response) => {
   try {
     const team = await getTeam(parsed.data.teamId);
     if (!team || !team.memberIds.includes(decoded.uid)) {
+      console.log(`⚠️ PUT /teams/active — team ${parsed.data.teamId} not found or not a member`);
       res.status(404).json({ error: "Team not found" });
       return;
     }
@@ -129,6 +132,7 @@ router.put("/active", async (req: Request, res: Response) => {
 router.get("/join", async (req: Request, res: Response) => {
   const code = req.query.code as string;
   if (!code) {
+    console.log("⚠️ GET /teams/join — missing invite code query param");
     res.status(400).json({ error: "code is required" });
     return;
   }
@@ -136,6 +140,7 @@ router.get("/join", async (req: Request, res: Response) => {
   try {
     const team = await getTeamByInviteCode(code);
     if (!team) {
+      console.log(`⚠️ GET /teams/join — invite code "${code}" not found or disabled`);
       res.status(404).json({ error: "Invite not found" });
       return;
     }
@@ -161,6 +166,7 @@ router.post("/join", async (req: Request, res: Response) => {
 
   const parsed = joinTeamSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log(`⚠️ POST /teams/join — validation failed for user ${decoded.uid}`);
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
@@ -168,11 +174,13 @@ router.post("/join", async (req: Request, res: Response) => {
   try {
     const team = await getTeamByInviteCode(parsed.data.inviteCode);
     if (!team) {
+      console.log(`⚠️ POST /teams/join — invite code "${parsed.data.inviteCode}" not found`);
       res.status(404).json({ error: "Invalid or expired invite code" });
       return;
     }
 
     if (team.memberIds.includes(decoded.uid)) {
+      console.log(`⚠️ POST /teams/join — user ${decoded.uid} already a member of team ${team.id}`);
       res.status(409).json({ error: "Already a member", teamId: team.id });
       return;
     }
@@ -202,6 +210,7 @@ router.get("/:id", async (req: Request, res: Response) => {
   try {
     const team = await getTeam(req.params.id as string);
     if (!team || !team.memberIds.includes(decoded.uid)) {
+      console.log(`⚠️ GET /teams/${req.params.id} — not found or not a member`);
       res.status(404).json({ error: "Team not found" });
       return;
     }
@@ -225,12 +234,14 @@ router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const team = await getTeam(req.params.id as string);
     if (!team || !team.memberIds.includes(decoded.uid)) {
+      console.log(`⚠️ PATCH /teams/${req.params.id} — not found or not a member`);
       res.status(404).json({ error: "Team not found" });
       return;
     }
 
     const parsed = createTeamSchema.safeParse(req.body);
     if (!parsed.success) {
+      console.log(`⚠️ PATCH /teams/${req.params.id} — validation failed`);
       res.status(400).json({ error: parsed.error.flatten().fieldErrors });
       return;
     }
@@ -255,16 +266,19 @@ router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const team = await getTeam(req.params.id as string);
     if (!team || !team.memberIds.includes(decoded.uid)) {
+      console.log(`⚠️ DELETE /teams/${req.params.id} — not found or not a member`);
       res.status(404).json({ error: "Team not found" });
       return;
     }
 
     if (team.type === "personal") {
+      console.log(`⚠️ DELETE /teams/${req.params.id} — attempted to delete personal team`);
       res.status(400).json({ error: "Cannot delete personal team" });
       return;
     }
 
     if (team.ownerId !== decoded.uid) {
+      console.log(`⚠️ DELETE /teams/${req.params.id} — user ${decoded.uid} is not the owner`);
       res.status(403).json({ error: "Only the team owner can delete the team" });
       return;
     }
@@ -272,6 +286,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     const spaces = await getAllSpaces(req.params.id as string);
     const tours = await getAllTours(req.params.id as string);
     if (spaces.length > 0 || tours.length > 0) {
+      console.log(`⚠️ DELETE /teams/${req.params.id} — has ${spaces.length} spaces and ${tours.length} tours`);
       res.status(400).json({ error: "Cannot delete team with existing spaces or tours" });
       return;
     }
@@ -296,6 +311,7 @@ router.post("/:id/invite", async (req: Request, res: Response) => {
   try {
     const team = await getTeam(req.params.id as string);
     if (!team || !team.memberIds.includes(decoded.uid)) {
+      console.log(`⚠️ POST /teams/${req.params.id}/invite — not found or not a member`);
       res.status(404).json({ error: "Team not found" });
       return;
     }
@@ -320,12 +336,14 @@ router.patch("/:id/invite", async (req: Request, res: Response) => {
   try {
     const team = await getTeam(req.params.id as string);
     if (!team || !team.memberIds.includes(decoded.uid)) {
+      console.log(`⚠️ PATCH /teams/${req.params.id}/invite — not found or not a member`);
       res.status(404).json({ error: "Team not found" });
       return;
     }
 
     const parsed = updateInviteSchema.safeParse(req.body);
     if (!parsed.success) {
+      console.log(`⚠️ PATCH /teams/${req.params.id}/invite — validation failed`);
       res.status(400).json({ error: parsed.error.flatten().fieldErrors });
       return;
     }
@@ -353,16 +371,19 @@ router.delete("/:id/members", async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const team = await getTeam(id);
     if (!team || !team.memberIds.includes(decoded.uid)) {
+      console.log(`⚠️ DELETE /teams/${id}/members — not found or not a member`);
       res.status(404).json({ error: "Team not found" });
       return;
     }
 
     if (team.type === "personal") {
+      console.log(`⚠️ DELETE /teams/${id}/members — attempted to leave personal team`);
       res.status(400).json({ error: "Cannot leave personal team" });
       return;
     }
 
     if (team.ownerId === decoded.uid) {
+      console.log(`⚠️ DELETE /teams/${id}/members — owner ${decoded.uid} attempted to leave`);
       res.status(400).json({ error: "Owner cannot leave the team" });
       return;
     }

@@ -41,6 +41,7 @@ export async function getSpace(id: string): Promise<Space | undefined> {
 }
 
 export async function createSpace(space: Space): Promise<Space> {
+  console.log(`💾 Firestore: creating space ${space.id} (${space.name})`);
   await db.collection(COLLECTION).doc(space.id).set(space);
   return space;
 }
@@ -49,6 +50,7 @@ export async function updateSpace(id: string, updates: Partial<Space>): Promise<
   const ref = db.collection(COLLECTION).doc(id);
   const doc = await ref.get();
   if (!doc.exists) return null;
+  console.log(`💾 Firestore: updating space ${id} — keys: ${Object.keys(updates).join(", ")}`);
   const merged = { ...doc.data(), ...updates, updatedAt: new Date().toISOString() };
   await ref.set(merged, { merge: true });
   return merged as Space;
@@ -58,14 +60,17 @@ export async function deleteSpace(id: string): Promise<boolean> {
   const ref = db.collection(COLLECTION).doc(id);
   const doc = await ref.get();
   if (!doc.exists) return false;
+  console.log(`💾 Firestore: deleting space ${id}`);
   await ref.delete();
   return true;
 }
 
 export async function deleteSpaceFiles(spaceId: string): Promise<void> {
+  console.log(`🗑️ Cleaning up storage files for space ${spaceId}`);
   const prefixes = [`models/${spaceId}/`, `images/${spaceId}/`];
   for (const prefix of prefixes) {
     const [files] = await bucket.getFiles({ prefix });
+    console.log(`🗑️ Deleting ${files.length} files with prefix "${prefix}"`);
     await Promise.all(files.map((f) => f.delete()));
   }
 }

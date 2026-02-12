@@ -29,6 +29,7 @@ export async function getTeamsByUser(userId: string): Promise<Team[]> {
 }
 
 export async function createTeam(team: Team): Promise<Team> {
+  console.log(`💾 Firestore: creating team ${team.id} (${team.name})`);
   await db.collection(COLLECTION).doc(team.id).set(team);
   return team;
 }
@@ -40,6 +41,7 @@ export async function updateTeam(
   const ref = db.collection(COLLECTION).doc(id);
   const doc = await ref.get();
   if (!doc.exists) return null;
+  console.log(`💾 Firestore: updating team ${id} — keys: ${Object.keys(updates).join(", ")}`);
   const merged = {
     ...doc.data(),
     ...updates,
@@ -53,6 +55,7 @@ export async function deleteTeam(id: string): Promise<boolean> {
   const ref = db.collection(COLLECTION).doc(id);
   const doc = await ref.get();
   if (!doc.exists) return false;
+  console.log(`💾 Firestore: deleting team ${id}`);
   await ref.delete();
   return true;
 }
@@ -77,6 +80,7 @@ export async function addMemberToTeam(
   teamId: string,
   userId: string
 ): Promise<Team | null> {
+  console.log(`💾 Firestore: adding user ${userId} to team ${teamId}`);
   return db.runTransaction(async (txn) => {
     const ref = db.collection(COLLECTION).doc(teamId);
     const doc = await txn.get(ref);
@@ -94,6 +98,7 @@ export async function removeMemberFromTeam(
   teamId: string,
   userId: string
 ): Promise<Team | null> {
+  console.log(`💾 Firestore: removing user ${userId} from team ${teamId}`);
   return db.runTransaction(async (txn) => {
     const ref = db.collection(COLLECTION).doc(teamId);
     const doc = await txn.get(ref);

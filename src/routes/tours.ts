@@ -56,6 +56,7 @@ router.post("/", async (req: Request, res: Response) => {
 
   const parsed = createTourSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log(`⚠️ POST /tours — validation failed for team ${ctx.teamId}`);
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
@@ -97,6 +98,7 @@ router.get("/:id", async (req: Request, res: Response) => {
   try {
     const tour = await getTour(req.params.id as string);
     if (!tour || tour.teamId !== ctx.teamId) {
+      console.log(`⚠️ GET /tours/${req.params.id} — not found or wrong team`);
       res.status(404).json({ error: "Tour not found" });
       return;
     }
@@ -130,12 +132,14 @@ router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const existing = await getTour(req.params.id as string);
     if (!existing || existing.teamId !== ctx.teamId) {
+      console.log(`⚠️ PATCH /tours/${req.params.id} — not found or wrong team`);
       res.status(404).json({ error: "Tour not found" });
       return;
     }
 
     const parsed = updateTourSchema.safeParse(req.body);
     if (!parsed.success) {
+      console.log(`⚠️ PATCH /tours/${req.params.id} — validation failed`);
       res.status(400).json({ error: parsed.error.flatten().fieldErrors });
       return;
     }
@@ -160,6 +164,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const existing = await getTour(req.params.id as string);
     if (!existing || existing.teamId !== ctx.teamId) {
+      console.log(`⚠️ DELETE /tours/${req.params.id} — not found or wrong team`);
       res.status(404).json({ error: "Tour not found" });
       return;
     }
@@ -183,6 +188,7 @@ router.post("/:id/rooms", async (req: Request, res: Response) => {
 
   const parsed = addRoomSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log(`⚠️ POST /tours/${req.params.id}/rooms — validation failed`);
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
@@ -192,6 +198,7 @@ router.post("/:id/rooms", async (req: Request, res: Response) => {
 
     const tour = await getTour(req.params.id as string);
     if (!tour || tour.teamId !== ctx.teamId) {
+      console.log(`⚠️ POST /tours/${req.params.id}/rooms — tour not found`);
       res.status(404).json({ error: "Tour not found" });
       return;
     }
@@ -217,12 +224,14 @@ router.delete("/:id/rooms", async (req: Request, res: Response) => {
   try {
     const tour = await getTour(req.params.id as string);
     if (!tour || tour.teamId !== ctx.teamId) {
+      console.log(`⚠️ DELETE /tours/${req.params.id}/rooms — tour not found`);
       res.status(404).json({ error: "Tour not found" });
       return;
     }
 
     const spaceId = req.query.spaceId as string;
     if (!spaceId) {
+      console.log(`⚠️ DELETE /tours/${req.params.id}/rooms — missing spaceId query param`);
       res.status(400).json({ error: "spaceId is required" });
       return;
     }

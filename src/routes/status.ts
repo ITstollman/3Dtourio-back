@@ -20,6 +20,7 @@ router.get("/:operationId", async (req: Request, res: Response) => {
   const spaces = await getAllSpaces(ctx.teamId);
   const space = spaces.find((s) => s.operationId === operationId);
   if (!space) {
+    console.log(`⚠️ GET /status/${operationId} — operation not found in team ${ctx.teamId}`);
     res.status(404).json({ error: "Operation not found" });
     return;
   }
@@ -39,6 +40,7 @@ router.get("/:operationId", async (req: Request, res: Response) => {
         mesh: world.assets?.mesh,
       });
 
+      console.log(`📦 Assets compressed and uploaded for space ${space.id}`);
       await updateSpace(space.id, {
         status: "ready",
         worldId: world.world_id,
