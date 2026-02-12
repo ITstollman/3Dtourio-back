@@ -7,15 +7,15 @@ import { resolveAuthContext } from "../lib/auth";
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB per file
 });
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
 
 const router = Router();
 
-// POST /api/generate — Trigger 3D generation
-router.post("/", upload.single("file"), async (req: Request, res: Response) => {
+// POST /api/generate — Trigger 3D generation (accepts up to 15 images)
+router.post("/", upload.array("files", 15), async (req: Request, res: Response) => {
   const ctx = await resolveAuthContext(req);
   if (!ctx) {
     res.status(401).json({ error: "Unauthorized" });
@@ -25,7 +25,7 @@ router.post("/", upload.single("file"), async (req: Request, res: Response) => {
   try {
     const spaceId = req.body.spaceId as string;
     const model = req.body.model as string | null;
-    const file = req.file;
+    const files = (req.files as Express.Multer.File[]) || [];
 
     if (!spaceId) {
       console.log("⚠️ POST /generate — missing spaceId");
@@ -43,24 +43,39 @@ router.post("/", upload.single("file"), async (req: Request, res: Response) => {
     const draft = model === "Marble 0.1-mini";
     let operationId: string;
 
-    if (file) {
-      if (!ALLOWED_TYPES.includes(file.mimetype)) {
-        console.log(`⚠️ POST /generate — rejected file type: ${file.mimetype}`);
-        res.status(400).json({ error: "Invalid file type. Allowed: JPEG, PNG, WebP, HEIC" });
-        return;
+    if (files.length > 0) {
+      // Validate all file types
+      for (const file of files) {
+        if (!ALLOWED_TYPES.includes(file.mimetype)) {
+          console.log(`⚠️ POST /generate — rejected file type: ${file.mimetype}`);
+          res.status(400).json({ error: "Invalid file type. Allowed: JPEG, PNG, WebP, HEIC" });
+          return;
+        }
       }
 
-      console.log(`🎨 Image uploaded for space ${spaceId} (${file.size} bytes)`);
-      const base64 = file.buffer.toString("base64");
+      console.log(`🎨 ${files.length} image(s) uploaded for space ${spaceId}`);
 
-      const ext = file.originalname.split(".").pop() || "jpg";
-      const imageUrl = await uploadImage(
-        file.buffer,
-        `images/${spaceId}/original.${ext}`,
-        file.mimetype || "image/jpeg"
+      // Upload all images to storage in parallel
+      const imageUrls = await Promise.all(
+        files.map(async (file, i) => {
+          const ext = file.originalname.split(".").pop() || "jpg";
+          return uploadImage(
+            file.buffer,
+            `images/${spaceId}/${i}.${ext}`,
+            file.mimetype || "image/jpeg"
+          );
+        })
       );
-      await updateSpace(spaceId, { originalImageUrl: imageUrl });
 
+      // Store all image URLs and use first as originalImageUrl
+      await updateSpace(spaceId, {
+        originalImageUrl: imageUrls[0],
+        imageUrls,
+        imageCount: imageUrls.length,
+      });
+
+      // Use first image for 3D generation
+      const base64 = files[0].buffer.toString("base64");
       operationId = await generateWorldFromImageBase64(base64, space.name, draft);
     } else {
       console.log(`🎨 Text-only generation for space ${spaceId}`);

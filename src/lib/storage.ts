@@ -20,6 +20,7 @@ export interface Space {
   meshUrl?: string;
   marbleUrl?: string;
   originalImageUrl?: string;
+  imageUrls?: string[];
   imageCount: number;
   createdAt: string;
   updatedAt: string;
