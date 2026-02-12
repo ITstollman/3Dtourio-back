@@ -17,6 +17,9 @@ import publicRoutes from "./routes/public";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust Railway's reverse proxy for correct client IP
+app.set("trust proxy", 1);
+
 // Security headers (allow popups for Firebase Auth)
 app.use(helmet({
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
