@@ -51,8 +51,12 @@ export async function updateSpace(id: string, updates: Partial<Space>): Promise<
   const ref = db.collection(COLLECTION).doc(id);
   const doc = await ref.get();
   if (!doc.exists) return null;
-  console.log(`💾 Firestore: updating space ${id} — keys: ${Object.keys(updates).join(", ")}`);
-  const merged = { ...doc.data(), ...updates, updatedAt: new Date().toISOString() };
+  // Strip undefined values — Firestore rejects them
+  const clean = Object.fromEntries(
+    Object.entries(updates).filter(([, v]) => v !== undefined)
+  );
+  console.log(`💾 Firestore: updating space ${id} — keys: ${Object.keys(clean).join(", ")}`);
+  const merged = { ...doc.data(), ...clean, updatedAt: new Date().toISOString() };
   await ref.set(merged, { merge: true });
   return merged as Space;
 }
