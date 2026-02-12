@@ -72,7 +72,7 @@ router.post("/", async (req: Request, res: Response) => {
       address,
       description,
       rooms: [],
-      isPublic: false,
+      isPublic: true,
       shareToken: randomBytes(16).toString("hex"),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
