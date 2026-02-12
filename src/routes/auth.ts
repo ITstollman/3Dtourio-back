@@ -4,7 +4,7 @@ import "../lib/firebase";
 import { db } from "../lib/firebase";
 import { verifyAuthToken } from "../lib/auth";
 import { generateInviteCode } from "../lib/teams";
-import { sessionSchema, onboardingSchema } from "../lib/schemas";
+import { sessionSchema, onboardingSchema, updateProfileSchema } from "../lib/schemas";
 import { randomUUID } from "crypto";
 
 const router = Router();
@@ -121,6 +121,104 @@ router.post("/onboarding", async (req: Request, res: Response) => {
   await batch.commit();
 
   res.json({ success: true, teamId });
+});
+
+// PATCH /api/auth/me — Update user profile
+router.patch("/me", async (req: Request, res: Response) => {
+  const decoded = await verifyAuthToken(req);
+  if (!decoded) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten().fieldErrors });
+    return;
+  }
+
+  const updates: Record<string, unknown> = {
+    ...parsed.data,
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    // Update Firestore user doc
+    await db.collection("users").doc(decoded.uid).set(updates, { merge: true });
+
+    // Sync displayName to Firebase Auth
+    if (updates.displayName) {
+      await getAuth().updateUser(decoded.uid, {
+        displayName: updates.displayName as string,
+      });
+    }
+
+    const doc = await db.collection("users").doc(decoded.uid).get();
+    res.json(doc.data());
+  } catch (err) {
+    console.error("Profile update error:", err);
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+// DELETE /api/auth/me — Delete user account
+router.delete("/me", async (req: Request, res: Response) => {
+  const decoded = await verifyAuthToken(req);
+  if (!decoded) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    // Check if user owns any teams
+    const ownedTeams = await db
+      .collection("teams")
+      .where("ownerId", "==", decoded.uid)
+      .where("type", "==", "organization")
+      .get();
+
+    if (!ownedTeams.empty) {
+      res.status(400).json({
+        error: "Transfer or delete your teams before deleting your account",
+      });
+      return;
+    }
+
+    // Remove user from all team memberIds
+    const memberTeams = await db
+      .collection("teams")
+      .where("memberIds", "array-contains", decoded.uid)
+      .get();
+
+    const batch = db.batch();
+
+    for (const teamDoc of memberTeams.docs) {
+      const team = teamDoc.data();
+      if (team.type === "personal") {
+        // Delete personal team
+        batch.delete(teamDoc.ref);
+      } else {
+        // Remove from org team memberIds
+        batch.update(teamDoc.ref, {
+          memberIds: team.memberIds.filter((id: string) => id !== decoded.uid),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Delete user doc
+    batch.delete(db.collection("users").doc(decoded.uid));
+
+    await batch.commit();
+
+    // Delete Firebase Auth user
+    await getAuth().deleteUser(decoded.uid);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Account deletion error:", err);
+    res.status(500).json({ error: "Failed to delete account" });
+  }
 });
 
 export default router;

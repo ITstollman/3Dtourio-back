@@ -71,3 +71,14 @@ export const switchTeamSchema = z.object({
 export const updateInviteSchema = z.object({
   enabled: z.boolean(),
 });
+
+// Profile
+export const updateProfileSchema = z
+  .object({
+    displayName: z.string().min(1).max(200),
+    phone: z.string().max(50),
+    companyName: z.string().max(200),
+    businessType: z.enum(["solo_agent", "agency", "property_management", "other"]),
+  })
+  .partial()
+  .refine((obj) => Object.keys(obj).length > 0, "At least one field required");

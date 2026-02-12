@@ -20,7 +20,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -36,6 +36,31 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.listen(PORT, () => {
+// Global error handler
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+// Validate required env vars
+const requiredVars = ["FIREBASE_STORAGE_BUCKET"];
+const hasServiceAccount = !!process.env.FIREBASE_SERVICE_ACCOUNT;
+if (!hasServiceAccount) {
+  requiredVars.push("FIREBASE_PROJECT_ID", "FIREBASE_CLIENT_EMAIL", "FIREBASE_PRIVATE_KEY");
+}
+for (const v of requiredVars) {
+  if (!process.env[v]) {
+    console.error(`Missing required environment variable: ${v}`);
+    process.exit(1);
+  }
+}
+
+const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+});
+
+// Graceful shutdown
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, shutting down gracefully...");
+  server.close(() => process.exit(0));
 });
