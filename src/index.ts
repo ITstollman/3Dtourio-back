@@ -17,8 +17,10 @@ import publicRoutes from "./routes/public";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Security headers
-app.use(helmet());
+// Security headers (allow popups for Firebase Auth)
+app.use(helmet({
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+}));
 
 // Gzip compression
 app.use(compression());
