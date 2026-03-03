@@ -42,12 +42,14 @@ router.post("/", upload.array("files", 15), async (req: Request, res: Response) 
     }
 
     // Credit check — deduct 1 credit atomically
+    // Skip for legacy teams that don't have credits field (pre-billing)
     const teamRef = db.collection("teams").doc(ctx.teamId);
     const hasCredit = await db.runTransaction(async (tx) => {
       const teamDoc = await tx.get(teamRef);
       const team = teamDoc.data();
-      const credits = team?.credits ?? 0;
-      const creditsUsed = team?.creditsUsed ?? 0;
+      if (team?.credits === undefined) return true; // legacy team — no limits
+      const credits = team.credits as number;
+      const creditsUsed = (team.creditsUsed as number) ?? 0;
       if (creditsUsed >= credits) return false;
       tx.update(teamRef, { creditsUsed: creditsUsed + 1 });
       return true;

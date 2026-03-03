@@ -65,12 +65,11 @@ router.post("/generate", upload.single("floorplan"), async (req: Request, res: R
       return;
     }
 
-    const data = await geminiRes.json() as { candidates?: { content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> } }[] };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = await geminiRes.json();
     const parts = data.candidates?.[0]?.content?.parts || [];
-    const imgPart = parts.find(
-      (p: { inlineData?: { mimeType?: string; data?: string } }) =>
-        p.inlineData?.mimeType
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const imgPart = parts.find((p: any) => p.inlineData?.mimeType);
 
     if (!imgPart?.inlineData) {
       console.error("❌ No image in Gemini response");
