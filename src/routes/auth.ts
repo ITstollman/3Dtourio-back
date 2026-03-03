@@ -105,6 +105,8 @@ router.post("/onboarding", async (req: Request, res: Response) => {
     memberIds: [decoded.uid],
     inviteCode: generateInviteCode(),
     inviteEnabled: false,
+    credits: 1,
+    creditsUsed: 0,
     createdAt: now,
     updatedAt: now,
   });

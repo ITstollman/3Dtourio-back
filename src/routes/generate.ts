@@ -4,6 +4,7 @@ import { generateWorldFromImageBase64, generateWorldFromText } from "../lib/worl
 import { updateSpace, getSpace } from "../lib/storage";
 import { uploadImage } from "../lib/firebase";
 import { resolveAuthContext } from "../lib/auth";
+import { db } from "../lib/firebase";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -37,6 +38,24 @@ router.post("/", upload.array("files", 15), async (req: Request, res: Response) 
     if (!space || space.teamId !== ctx.teamId) {
       console.log(`⚠️ POST /generate — space ${spaceId} not found or wrong team`);
       res.status(404).json({ error: "Space not found" });
+      return;
+    }
+
+    // Credit check — deduct 1 credit atomically
+    const teamRef = db.collection("teams").doc(ctx.teamId);
+    const hasCredit = await db.runTransaction(async (tx) => {
+      const teamDoc = await tx.get(teamRef);
+      const team = teamDoc.data();
+      const credits = team?.credits ?? 0;
+      const creditsUsed = team?.creditsUsed ?? 0;
+      if (creditsUsed >= credits) return false;
+      tx.update(teamRef, { creditsUsed: creditsUsed + 1 });
+      return true;
+    });
+
+    if (!hasCredit) {
+      console.log(`⚠️ POST /generate — team ${ctx.teamId} has no credits remaining`);
+      res.status(402).json({ error: "No credits remaining", code: "NO_CREDITS" });
       return;
     }
 

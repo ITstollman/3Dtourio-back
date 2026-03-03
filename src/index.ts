@@ -13,6 +13,8 @@ import toursRoutes from "./routes/tours";
 import generateRoutes from "./routes/generate";
 import statusRoutes from "./routes/status";
 import publicRoutes from "./routes/public";
+import floorplanRoutes from "./routes/floorplan";
+import billingRoutes from "./routes/billing";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -48,6 +50,10 @@ app.use(cors({
 }));
 
 app.use(cookieParser());
+
+// Raw body for Stripe webhook (must be before express.json)
+app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
+
 app.use(express.json({ limit: "1mb" }));
 
 // Rate limiting — general API
@@ -80,6 +86,16 @@ const generateLimiter = rateLimit({
 });
 app.use("/api/generate", generateLimiter);
 
+// Rate limit for floor plan generation (public, tight limit per IP)
+const floorplanLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Floor plan generation limit reached, please try again later" },
+});
+app.use("/api/floor-plan", floorplanLimiter);
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/teams", teamsRoutes);
@@ -88,6 +104,8 @@ app.use("/api/tours", toursRoutes);
 app.use("/api/generate", generateRoutes);
 app.use("/api/status", statusRoutes);
 app.use("/api/t", publicRoutes);
+app.use("/api/floor-plan", floorplanRoutes);
+app.use("/api/billing", billingRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {
