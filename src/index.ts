@@ -15,6 +15,7 @@ import statusRoutes from "./routes/status";
 import publicRoutes from "./routes/public";
 import floorplanRoutes from "./routes/floorplan";
 import billingRoutes from "./routes/billing";
+import contactRoutes from "./routes/contact";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -106,6 +107,7 @@ app.use("/api/status", statusRoutes);
 app.use("/api/t", publicRoutes);
 app.use("/api/floor-plan", floorplanRoutes);
 app.use("/api/billing", billingRoutes);
+app.use("/api/contact", contactRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {
