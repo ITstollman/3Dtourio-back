@@ -16,8 +16,8 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
 
 const router = Router();
 
-// POST /api/generate — Trigger 3D generation (accepts up to 15 images)
-router.post("/", upload.array("files", 15), async (req: Request, res: Response) => {
+// POST /api/generate — Trigger generation (accepts up to 15 images + optional floorplan)
+router.post("/", upload.fields([{ name: "files", maxCount: 15 }, { name: "floorplan", maxCount: 1 }]), async (req: Request, res: Response) => {
   const ctx = await resolveAuthContext(req);
   if (!ctx) {
     res.status(401).json({ error: "Unauthorized" });
@@ -27,7 +27,9 @@ router.post("/", upload.array("files", 15), async (req: Request, res: Response) 
   try {
     const spaceId = req.body.spaceId as string;
     const model = req.body.model as string | null;
-    const files = (req.files as Express.Multer.File[]) || [];
+    const uploadedFiles = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+    const files = uploadedFiles?.files || [];
+    const floorplanFiles = uploadedFiles?.floorplan || [];
 
     if (!spaceId) {
       console.log("⚠️ POST /generate — missing spaceId");
@@ -95,6 +97,18 @@ router.post("/", upload.array("files", 15), async (req: Request, res: Response) 
         imageUrls,
         imageCount: imageUrls.length,
       });
+
+      // Upload floor plan if provided
+      if (floorplanFiles.length > 0) {
+        const fp = floorplanFiles[0];
+        const fpExt = fp.originalname.split(".").pop() || "png";
+        const floorPlanUrl = await uploadImage(
+          fp.buffer,
+          `images/${spaceId}/floorplan.${fpExt}`,
+          fp.mimetype || "image/png"
+        );
+        await updateSpace(spaceId, { floorPlanUrl } as any);
+      }
 
       // Gemini mode: skip WorldLabs, use uploaded image directly
       if (useGemini) {

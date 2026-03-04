@@ -28,6 +28,7 @@ export interface Space {
   meshUrl?: string;
   marbleUrl?: string;
   originalImageUrl?: string;
+  floorPlanUrl?: string;
   imageUrls?: string[];
   imageCount: number;
   revisions?: Revision[];
