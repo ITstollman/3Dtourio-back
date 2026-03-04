@@ -10,7 +10,7 @@ if (apiKey) {
 }
 
 const RECIPIENTS = [
-  "itamar.stollnman@gmail.com",
+  "itamar.stollman@gmail.com",
   "hollander.omri@gmail.com",
 ];
 
