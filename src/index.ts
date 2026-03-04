@@ -52,6 +52,57 @@ app.use(cors({
 
 app.use(cookieParser());
 
+// ──────────────────────────────────────────────
+// Global request/response logger
+// ──────────────────────────────────────────────
+app.use((req, res, next) => {
+  const start = Date.now();
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const origin = req.headers.origin || "no-origin";
+  const ua = req.headers["user-agent"] || "no-ua";
+  const authHeader = req.headers.authorization;
+  const hasAuth = authHeader ? `Bearer(${authHeader.length}chars)` : "none";
+  const teamId = req.headers["x-team-id"] || "no-team";
+
+  console.log(`📥 ${req.method} ${req.originalUrl} — ip:${ip} origin:${origin} auth:${hasAuth} team:${teamId} ua:${ua.slice(0, 80)}`);
+
+  // Log request body for POST/PUT/PATCH (skip large bodies and webhooks)
+  if (["POST", "PUT", "PATCH"].includes(req.method) && !req.originalUrl.includes("/webhook")) {
+    const contentType = req.headers["content-type"] || "";
+    if (contentType.includes("application/json")) {
+      // Body will be parsed later by express.json, so log in response phase
+      const origJson = res.json.bind(res);
+      let bodyLogged = false;
+      const origSend = res.send.bind(res);
+
+      // Intercept to log after body is parsed
+      const logBody = () => {
+        if (!bodyLogged && req.body && typeof req.body === "object") {
+          const bodyStr = JSON.stringify(req.body);
+          console.log(`📥 ${req.method} ${req.originalUrl} BODY: ${bodyStr.slice(0, 500)}${bodyStr.length > 500 ? "...(truncated)" : ""}`);
+          bodyLogged = true;
+        }
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      res.json = (body: any) => { logBody(); return origJson(body); };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (res as any).send = (body: any) => { logBody(); return origSend(body); };
+    } else if (contentType.includes("multipart")) {
+      console.log(`📥 ${req.method} ${req.originalUrl} BODY: [multipart/form-data]`);
+    }
+  }
+
+  res.on("finish", () => {
+    const elapsed = Date.now() - start;
+    const status = res.statusCode;
+    const icon = status >= 500 ? "🔴" : status >= 400 ? "🟡" : "🟢";
+    console.log(`${icon} ${req.method} ${req.originalUrl} → ${status} in ${elapsed}ms`);
+  });
+
+  next();
+});
+
 // Raw body for Stripe webhook (must be before express.json)
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 
@@ -117,7 +168,7 @@ app.get("/api/health", (_req, res) => {
 
 // Global error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error("❌ Unhandled error:", err);
+  console.error(`❌ Unhandled error on ${_req.method} ${_req.originalUrl}:`, err.message, err.stack);
   res.status(500).json({ error: "Internal server error" });
 });
 
@@ -136,6 +187,14 @@ for (const v of requiredVars) {
 
 console.log(`🚀 Environment validated — ${requiredVars.length} required vars OK`);
 console.log(`🚀 Allowed CORS origins: ${allowedOrigins.join(", ")}`);
+
+// Log which env vars are present (not their values)
+const allEnvKeys = [
+  "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "SENDGRID_API_KEY",
+  "GEMINI_API_KEY", "FIREBASE_STORAGE_BUCKET", "FIREBASE_PROJECT_ID",
+  "FRONTEND_URL", "DISPLAY_URL", "LANDING_URL",
+];
+console.log(`🚀 Env vars: ${allEnvKeys.map(k => `${k}=${process.env[k] ? "✅" : "❌"}`).join(", ")}`);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
