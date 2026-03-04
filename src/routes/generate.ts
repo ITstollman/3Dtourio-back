@@ -61,8 +61,8 @@ router.post("/", upload.array("files", 15), async (req: Request, res: Response) 
       return;
     }
 
+    const useGemini = model === "gemini";
     const draft = model === "Marble 0.1-mini";
-    let operationId: string;
 
     if (files.length > 0) {
       // Validate all file types
@@ -95,21 +95,40 @@ router.post("/", upload.array("files", 15), async (req: Request, res: Response) 
         imageCount: imageUrls.length,
       });
 
-      // Use first image for 3D generation
+      // Gemini mode: skip WorldLabs, use uploaded image directly
+      if (useGemini) {
+        await updateSpace(spaceId, {
+          status: "ready",
+          thumbnailUrl: imageUrls[0],
+        });
+        console.log(`🎨 Gemini mode — space ${spaceId} marked ready (no 3D generation)`);
+        res.json({ status: "ready" });
+        return;
+      }
+
+      // Use first image for 3D generation via WorldLabs
       const base64 = files[0].buffer.toString("base64");
-      operationId = await generateWorldFromImageBase64(base64, space.name, draft);
+      const operationId = await generateWorldFromImageBase64(base64, space.name, draft);
+
+      await updateSpace(spaceId, {
+        operationId,
+        status: "generating",
+      });
+
+      console.log(`🎨 Generation started — space ${spaceId}, model: ${draft ? "mini" : "plus"}`);
+      res.json({ operationId, status: "generating" });
     } else {
       console.log(`🎨 Text-only generation for space ${spaceId}`);
-      operationId = await generateWorldFromText(space.name, draft);
+      const operationId = await generateWorldFromText(space.name, draft);
+
+      await updateSpace(spaceId, {
+        operationId,
+        status: "generating",
+      });
+
+      console.log(`🎨 Generation started — space ${spaceId}, model: ${draft ? "mini" : "plus"}`);
+      res.json({ operationId, status: "generating" });
     }
-
-    await updateSpace(spaceId, {
-      operationId,
-      status: "generating",
-    });
-
-    console.log(`🎨 Generation started — space ${spaceId}, model: ${draft ? "mini" : "plus"}`);
-    res.json({ operationId, status: "generating" });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("❌ Generate error:", message);
