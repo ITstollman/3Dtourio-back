@@ -1,8 +1,9 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import { generateWorldFromImageBase64, generateWorldFromText } from "../lib/worldlabs";
-import { updateSpace, getSpace } from "../lib/storage";
+import { updateSpace, getSpace, Revision } from "../lib/storage";
 import { uploadImage } from "../lib/firebase";
+import { randomUUID } from "crypto";
 import { resolveAuthContext } from "../lib/auth";
 import { db } from "../lib/firebase";
 
@@ -97,12 +98,32 @@ router.post("/", upload.array("files", 15), async (req: Request, res: Response) 
 
       // Gemini mode: skip WorldLabs, use uploaded image directly
       if (useGemini) {
+        const style = (req.body.style as string) || "modern_luxury";
+        const prompt = (req.body.prompt as string) || "";
+        const currentRevisions = space.revisions || [];
+
+        if (currentRevisions.length >= 5) {
+          console.log(`⚠️ POST /generate — space ${spaceId} max revisions reached`);
+          res.status(400).json({ error: "Maximum revisions reached (5)", code: "MAX_REVISIONS" });
+          return;
+        }
+
+        const revision: Revision = {
+          id: randomUUID(),
+          imageUrl: imageUrls[0],
+          style,
+          prompt,
+          createdAt: new Date().toISOString(),
+        };
+
         await updateSpace(spaceId, {
           status: "ready",
           thumbnailUrl: imageUrls[0],
-        });
-        console.log(`🎨 Gemini mode — space ${spaceId} marked ready (no 3D generation)`);
-        res.json({ status: "ready" });
+          revisions: [...currentRevisions, revision],
+        } as any);
+
+        console.log(`🎨 Gemini mode — space ${spaceId} marked ready (revision ${currentRevisions.length + 1}/5)`);
+        res.json({ status: "ready", revision });
         return;
       }
 

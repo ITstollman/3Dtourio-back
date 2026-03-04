@@ -2,6 +2,14 @@ import { db, bucket } from "./firebase";
 
 const COLLECTION = "spaces";
 
+export interface Revision {
+  id: string;
+  imageUrl: string;
+  style: string;
+  prompt: string;
+  createdAt: string;
+}
+
 export interface Space {
   id: string;
   teamId: string;
@@ -22,6 +30,7 @@ export interface Space {
   originalImageUrl?: string;
   imageUrls?: string[];
   imageCount: number;
+  revisions?: Revision[];
   createdAt: string;
   updatedAt: string;
   errorMessage?: string;
